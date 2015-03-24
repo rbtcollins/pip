@@ -511,6 +511,13 @@ class RequirementSet(object):
             dist = abstract_dist.dist(finder)
             more_reqs = []
 
+            # We add req_to_install before its dependencies, so that when
+            # to_install is calculated, which reverses the order,
+            # req_to_install is installed after its dependencies.
+            if not self.has_requirement(req_to_install.name):
+                # 'unnamed' requirements will get added here
+                self.add_requirement(req_to_install)
+
             if not self.ignore_dependencies:
                 if (req_to_install.extras):
                     logger.debug(
@@ -540,10 +547,6 @@ class RequirementSet(object):
                     )
                     more_reqs.append(subreq)
                     self.add_requirement(subreq)
-
-            if not self.has_requirement(req_to_install.name):
-                # 'unnamed' requirements will get added here
-                self.add_requirement(req_to_install)
 
             # cleanup tmp src
             self.reqs_to_cleanup.append(req_to_install)
