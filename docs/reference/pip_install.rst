@@ -337,9 +337,58 @@ the project path.  This is one advantage over just using ``setup.py develop``,
 which creates the "egg-info" directly relative the current working directory.
 
 
+Build System Interface
+++++++++++++++++++++++
 
-Controlling setup_requires
-++++++++++++++++++++++++++
+In order for pip to install a package from source, pip must recognise the build
+system. Today only one build system is recognised, with two variants.
+
+If there is a ``setup.cfg`` with any of ``[extras]``, ``install-requires``,
+``setup-requires``, or ``requires-dist`` present then a declarative setuptools
+package is detected.
+
+Otherwise there is a ``setup.py`` then non-declarative setuptools is assumed.
+
+Declarative setuptools
+~~~~~~~~~~~~~~~~~~~~~~
+
+``setup.py`` must implement the following commands::
+
+    setup.py install --record XXX [--single-version-externally-managed] [--root XXX] [--compile|--no-compile] [--install-headers XXX]
+
+With declarative dependencies, easy_install - the ``setup_requires`` keyword
+is never triggered, as pip can take care of installing the requirements before
+``setup.py`` is invoked.
+
+``setup.cfg`` must contain the package name, and one or more of setup requires,
+install requires or extra requires::
+
+    [metadata]
+    name = Example
+    setup-requires =
+      somedep
+    install-requires =
+      runtimedep
+    [extras]
+    one =
+      anotherdep
+    tests =
+      mytestdep
+
+For compatibility with ``d2to1`` ``requires-dist`` is accepted as an alias for
+``install-requires``, though if both are supplied an error will occur.
+
+Non-declarative setuptools
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``setup.py`` must implement the following commands::
+
+    setup.py egg_info [--egg-base XXX]
+    setup.py install --record XXX [--single-version-externally-managed] [--root XXX] [--compile|--no-compile] [--install-headers XXX]
+
+The ``egg_info`` command should create egg metadata for the package, as
+described in the setuptools documentation at
+http://pythonhosted.org/setuptools/setuptools.html#egg-info-create-egg-metadata-and-set-build-tags
 
 Setuptools offers the ``setup_requires`` `setup() keyword
 <http://pythonhosted.org/setuptools/setuptools.html#new-and-changed-setup-keywords>`_
@@ -370,19 +419,8 @@ To have the dependency located from a local directory and not crawl PyPI, add th
   allow_hosts = ''
   find_links = file:///path/to/local/archives
 
-
-Build System Interface
-++++++++++++++++++++++
-
-In order for pip to install a package from source, ``setup.py`` must implement
-the following commands::
-
-    setup.py egg_info [--egg-base XXX]
-    setup.py install --record XXX [--single-version-externally-managed] [--root XXX] [--compile|--no-compile] [--install-headers XXX]
-
-The ``egg_info`` command should create egg metadata for the package, as
-described in the setuptools documentation at
-http://pythonhosted.org/setuptools/setuptools.html#egg-info-create-egg-metadata-and-set-build-tags
+Common setuptools behaviour
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The ``install`` command should implement the complete process of installing the
 package to the target directory XXX.
@@ -404,12 +442,13 @@ Investigate in more detail when this command is required).
 
 No other build system commands are invoked by the ``pip install`` command.
 
+Wheels
+~~~~~~
+
 Installing a package from a wheel does not invoke the build system at all.
 
 .. _PyPI: http://pypi.python.org/pypi/
 .. _setuptools extras: http://packages.python.org/setuptools/setuptools.html#declaring-extras-optional-features-with-their-own-dependencies
-
-
 
 .. _`pip install Options`:
 

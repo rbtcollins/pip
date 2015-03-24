@@ -8,6 +8,7 @@ import os
 
 from pip._vendor import pkg_resources
 from pip._vendor import requests
+from pip._vendor.six.moves import configparser
 
 from pip.download import (url_to_path, unpack_url)
 from pip.exceptions import (InstallationError, BestVersionAlreadyInstalled,
@@ -81,6 +82,16 @@ class DistAbstraction(object):
         raise NotImplementedError(self.dist)
 
 
+def _sdist_or_static(req_to_install):
+    result = IsStaticMetadata(req_to_install)
+    try:
+        result.dist(None)
+        return result
+    except (configparser.NoSectionError, configparser.NoOptionError,
+            BadStaticSetupCfg):
+        return IsSDist(req_to_install)
+
+
 def make_abstract_dist(req_to_install):
     """Factory to make an abstract dist object.
 
@@ -90,11 +101,11 @@ def make_abstract_dist(req_to_install):
     :return: A concrete DistAbstraction.
     """
     if req_to_install.editable:
-        return IsSDist(req_to_install)
+        return _sdist_or_static(req_to_install)
     elif req_to_install.link and req_to_install.link.is_wheel:
         return IsWheel(req_to_install)
     else:
-        return IsSDist(req_to_install)
+        return _sdist_or_static(req_to_install)
 
 
 class IsWheel(DistAbstraction):
@@ -122,6 +133,98 @@ class IsSDist(DistAbstraction):
     def prep_for_dist(self):
         self.req_to_install.run_egg_info()
         self.req_to_install.assert_source_matches_version()
+
+
+class SetupCfgDistribution(pkg_resources.Distribution):
+    """A Distribution object that consults setup.cfg."""
+
+    def __init__(self, cfg, location=None):
+        self._cfg = cfg
+        project_name = cfg.get('metadata', 'name')
+        super(SetupCfgDistribution, self).__init__(
+            location=location, project_name=project_name)
+
+    @property
+    def _dep_map(self):
+        # Distribution._dep_map is not generic - its expressed in terms of the
+        # requires.txt format from within an egg info directory, and the
+        # metadata interfae within Distribution looks for files-and-lines.
+        # To provide metadata from a ConfigParser we could either marshall
+        # the data to a VFS, or we can reimplement this property which is
+        # the primary worker to obtain requirements.
+        try:
+            return self.__dep_map
+        except AttributeError:
+            # requires
+            requires = self._option('install-requires', 'requires-dist')
+            extras = (
+                self._cfg.has_section('extras') and
+                self._cfg.items('extras')) or []
+            dm = {}
+            dm.setdefault(None, []).extend(
+                pkg_resources.parse_requirements(requires))
+            for extra, extra_reqs in extras:
+                dm.setdefault(extra, []).extend(
+                    pkg_resources.parse_requirements(extra_reqs))
+            self.__dep_map = dm
+            return dm
+
+    def setup_requires(self):
+        try:
+            setup_requires = self._cfg.get('metadata', 'setup-requires')
+        except configparser.NoOptionError:
+            return []
+        return list(pkg_resources.parse_requirements(setup_requires))
+
+    def _option(self, option1, option2):
+        try:
+            result = self._cfg.get('metadata', option1)
+            if self._cfg.has_option('metadata', option2):
+                raise BadStaticSetupCfg('both %s and %s' % (option1, option2))
+            return result
+        except configparser.NoOptionError:
+            try:
+                return self._cfg.get('metadata', option2)
+            except configparser.NoOptionError:
+                return []
+
+
+class BadStaticSetupCfg(Exception):
+    pass
+
+
+def _validate_static(dist):
+    has_deps = False
+    for deps in dist._dep_map.values():
+        if deps:
+            has_deps = True
+            break
+    if not (dist.project_name and (has_deps or dist.setup_requires())):
+        raise BadStaticSetupCfg()
+
+
+class IsStaticMetadata(DistAbstraction):
+    """A static setup.cfg based source tree.
+
+    Must have a name and requires|setup_requires in setup.cfg to be usable.
+    We look for either requires or setup-requires to handle both the case where
+    a setup.py has setup-requires but no runtime requirements are declared, and
+    the case where folk have declaratively expressed their dist requirements
+    without needing a setup-requires.
+    """
+    def dist(self, finder):
+        cfg = configparser.SafeConfigParser()
+        setup_cfg = os.path.join(self.req_to_install.source_dir, 'setup.cfg')
+        cfg.read(setup_cfg)
+        dist = SetupCfgDistribution(cfg=cfg, location=setup_cfg)
+        _validate_static(dist)
+        return dist
+
+    def prep_for_dist(self):
+        self._dist = self.dist(None)
+        self.req_to_install.req = pkg_resources.Requirement.parse(
+            self._dist.project_name)
+        self.req_to_install._correct_build_location()
 
 
 class Installed(DistAbstraction):
@@ -558,6 +661,15 @@ class RequirementSet(object):
                 self.add_requirement(req_to_install, None)
 
             if not self.ignore_dependencies:
+                if getattr(dist, 'setup_requires', None):
+                    setup_requires = dist.setup_requires()
+                    if setup_requires:
+                        logger.debug(
+                            "Installing setup_requires: %r",
+                            ','.join(r.project_name for r in setup_requires))
+                    for subreq in setup_requires:
+                        add_req(subreq)
+
                 if (req_to_install.extras):
                     logger.debug(
                         "Installing extra requirements: %r",

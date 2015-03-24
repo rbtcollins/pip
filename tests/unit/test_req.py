@@ -15,8 +15,10 @@ from pip.index import PackageFinder
 from pip.req import (InstallRequirement, RequirementSet,
                      Requirements, parse_requirements)
 from pip.req.req_install import parse_editable, _filter_install
+from pip.req import req_set
 from pip.utils import read_text_file
 from pip._vendor import pkg_resources
+from pip._vendor.six.moves import configparser
 from tests.lib import assert_raises_regexp
 
 
@@ -460,3 +462,43 @@ def test_filter_install():
         INFO, 'foo bar')
     assert _filter_install('I made a SyntaxError') == (
         INFO, 'I made a SyntaxError')
+
+
+def _base_cfg():
+    cfg = configparser.SafeConfigParser()
+    cfg.add_section('metadata')
+    cfg.set('metadata', 'name', 'foo')
+    return cfg
+
+
+def test_setup_cfg_no_deps():
+    cfg = _base_cfg()
+    dist = req_set.SetupCfgDistribution(cfg, None)
+    with pytest.raises(req_set.BadStaticSetupCfg):
+        req_set._validate_static(dist)
+
+
+def _setup_cfg_has_option(option):
+    cfg = _base_cfg()
+    cfg.set('metadata', option, 'dep')
+    dist = req_set.SetupCfgDistribution(cfg, None)
+    req_set._validate_static(dist)
+
+
+def _setup_cfg_conflicting_option(option1, option2):
+    cfg = _base_cfg()
+    cfg.set('metadata', option1, 'dep')
+    cfg.set('metadata', option2, 'dep')
+    dist = req_set.SetupCfgDistribution(cfg, None)
+    with pytest.raises(req_set.BadStaticSetupCfg):
+        req_set._validate_static(dist)
+
+
+def test_setup_cfg_setup_requires():
+    _setup_cfg_has_option('setup-requires')
+
+
+def test_setup_cfg_install_requires():
+    _setup_cfg_has_option('install-requires')
+    _setup_cfg_has_option('requires-dist')
+    _setup_cfg_conflicting_option('install-requires', 'requires-dist')

@@ -734,6 +734,38 @@ def test_install_upgrade_editable_depending_on_other_editable(script):
     assert "pkgb" in result.stdout
 
 
+def _test_setup_requires(script, data, options, name):
+    to_install = data.packages.join(name)
+    args = ['install'] + options + [to_install, '-f', data.packages]
+    res = script.pip(*args, expect_error=False)
+    assert 'Running setup.py install for upper\n' in str(res)
+    return res
+
+
+def test_install_declarative_setup_requires_editable(script, data):
+    res = _test_setup_requires(script, data, ['-e'], 'SetupRequires')
+    assert 'Running setup.py develop for SetupRequires\n' in str(res), str(res)
+
+
+def test_install_declarative_setup_requires(script, data):
+    res = _test_setup_requires(script, data, [], 'SetupRequires')
+    assert 'Running setup.py install for SetupRequires\n' in str(res), str(res)
+
+
+def test_install_declarative_requires(script, data):
+    res = _test_setup_requires(script, data, [], 'SetupRequires2')
+    assert script.site_packages / 'setuprequires2' in res.files_created, res
+
+
+def test_install_declarative_extras(script, data):
+    res = _test_setup_requires(script, data, [], 'SetupRequires3')
+    assert 'Running setup.py install for SetupRequires\n' in str(res), str(res)
+    assert 'Running setup.py install for simple\n' in str(res), str(res)
+    assert 'Running setup.py install for simple2\n' in str(res), str(res)
+    assert 'Running setup.py install for SetupRequires3\n' in str(res), \
+        str(res)
+
+
 def test_install_topological_sort(script, data):
     to_install = data.packages.join('TopoRequires4')
     args = ['install'] + [to_install, '-f', data.packages]

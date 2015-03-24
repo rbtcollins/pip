@@ -71,6 +71,38 @@ priority-*
 ----------
 used for testing wheel priority over sdists
 
+SetupRequires
+-------------
+
+has a setup.cfg declaring a setup-requires on upper, and a setup.py that will
+fail to import if upper is not installed.
+
+SetupRequires-0.0.1.tar.gz
+--------------------------
+
+SetupRequires sdisted, for testing transitive setup_requires.
+
+SetupRequires2
+--------------
+
+has a setup.cfg declaring a dist-requires on setuprequires. Covers both
+setup-requires in depended-on packages, and setup.cfg with only requires-dist
+expressed.
+Also in setup.cfg declares two extras - a and b, a which brings in simple
+and b which brings in simple2, for testing extras from setup.cfg.
+
+SetupRequires2-0.0.1.tar.gz
+---------------------------
+
+SetupRequires2 sdisted, for testing declarative extras.
+
+SetupRequires3
+--------------
+
+requires SetupRequires2[a,b], as using extras for local paths is currently
+broken (issue 1236). Ideally SetupRequires3 would have the extras itself
+and no requires-dist (to test declarative extras as sole requirements).
+
 TopoRequires[123][-0.0.1.tar.gz]
 --------------------------------
 
