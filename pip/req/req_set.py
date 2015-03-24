@@ -511,6 +511,18 @@ class RequirementSet(object):
             dist = abstract_dist.dist(finder)
             more_reqs = []
 
+            def add_req(subreq):
+                if self.has_requirement(subreq.project_name):
+                    # FIXME: check for conflict
+                    return
+                subreq = InstallRequirement(
+                    str(subreq),
+                    req_to_install,
+                    isolated=self.isolated,
+                )
+                more_reqs.append(subreq)
+                self.add_requirement(subreq)
+
             # We add req_to_install before its dependencies, so that when
             # to_install is calculated, which reverses the order,
             # req_to_install is installed after its dependencies.
@@ -537,16 +549,7 @@ class RequirementSet(object):
                     set(dist.extras) & set(req_to_install.extras)
                 )
                 for subreq in dist.requires(available_requested):
-                    if self.has_requirement(subreq.project_name):
-                        # FIXME: check for conflict
-                        continue
-                    subreq = InstallRequirement(
-                        str(subreq),
-                        req_to_install,
-                        isolated=self.isolated,
-                    )
-                    more_reqs.append(subreq)
-                    self.add_requirement(subreq)
+                    add_req(subreq)
 
             # cleanup tmp src
             self.reqs_to_cleanup.append(req_to_install)
