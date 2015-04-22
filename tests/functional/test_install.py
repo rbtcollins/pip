@@ -714,3 +714,24 @@ def test_install_builds_wheels(script, data):
     assert "Running setup.py install for requires-wheel" in str(res), str(res)
     # wheelbroken has to run install
     assert "Running setup.py install for wheelb" in str(res), str(res)
+
+
+def test_install_existing_constraints_satisfiable(script, data):
+    Needs three packages:
+    - X deps Y==V
+     - Z deps Y !=V
+     -> install Z should install different X that is satisfied by Y!=V
+
+
+def test_install_existing_constraints_unsatisfiable(script, data):
+    Needs three packages:
+    - X deps Y==V
+     - Z deps Y !=V
+     -> install Z should fail when it cannot find different X that is satisfied by Y!=V
+
+
+def test_install_existing_constraints_satisfiable_on_upgrade(script, data):
+    Needs three packages:
+    - X deps Y==V
+     - Z deps Y
+    - pip install -U Z which finds new Y should install different X that is satisfied y new Y.

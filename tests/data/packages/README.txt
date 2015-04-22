@@ -83,6 +83,11 @@ awareness we'll end up attempting to install TopoRequires after one of
 TopoRequires2, TopoRequires3 or TopoRequires4. (prefix iteration works as its
 topological, suffix iteration likewise, infix breaks).
 
+requires_simple-0.1.tar.gz
+--------------------------
+Requires simple==1.0. Used for testing constraint conflicts with existing
+packages.
+
 simple[2]-[123].0.tar.gz
 ------------------------
 contains "simple[2]" package; good for basic testing and version logic.
